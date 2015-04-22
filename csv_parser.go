@@ -2,47 +2,60 @@ package main
 
 import (
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"log"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
+
+type RawRfRecord struct {
+	recorded_at      time.Time
+	hz_start         string
+	hz_end           string
+	hz_step          string
+	averaged_samples string
+	samples          []string
+}
 
 const (
 	matchPattern = "^[0-9]{4}-[0-9]{2}-[0-9]{2}, [0-9]{2}:[0-9]{2}:[0-9]{2}, *"
 	timeLayout   = "2006-01-02 15:04:05 (MST)"
 )
 
-func Parse(csv_data <-chan string, rf_data chan<- RfRecord) {
-	var record RfRecord
-
-	for line := range csv_data {
+func Parse(data <-chan string, rf_data chan<- RfRecord) {
+	for line := range data {
 		matched, err := regexp.MatchString(matchPattern, line)
-		if matched {
-			record = buildRfRecord(line)
-		}
 		if err != nil {
-			log.Println("Error matching data: %s\n", err)
-		} else {
-			rf_data <- record
+			log.Printf("Error matching data: %s\n", err)
+			continue
 		}
+
+		if false == matched {
+			continue
+		}
+
+		// TODO Validate the line before trying to parse it
+		records, err := buildRfRecords(line)
+
+		go func() {
+			for _, record := range records {
+				rf_data <- record
+			}
+		}()
 	}
 }
 
-// TODO add err return for nil
-func buildRfRecord(csv_line string) RfRecord {
-	parsed_csv := parseCsv(csv_line)
+func buildRfRecords(line string) ([]RfRecord, error) {
+	parsed_csv := parseCsv(line)
 
 	if len(parsed_csv) == 0 {
-		return RfRecord{}
+		return nil, errors.New("Empty raw record")
 	}
 
-	lat_long := getGpsCoordinates()
-
-	return RfRecord{
-		latitude:         lat_long[0],
-		longitude:        lat_long[1], // TODO Need to get from GPS feed
+	raw_record := RawRfRecord{
 		recorded_at:      getTimestampFromRecord(parsed_csv),
 		hz_start:         parsed_csv[2],
 		hz_end:           parsed_csv[3],
@@ -50,6 +63,49 @@ func buildRfRecord(csv_line string) RfRecord {
 		averaged_samples: parsed_csv[5],
 		samples:          parsed_csv[6 : len(parsed_csv)-1],
 	}
+
+	result, err := processRawRfRecord(raw_record)
+	return result, err
+}
+
+func processRawRfRecord(rawRecord RawRfRecord) ([]RfRecord, error) {
+	// TODO This should be handled by a validator in Parse
+	step, err := stringToFloat64(rawRecord.hz_step)
+	if err != nil {
+		msg := fmt.Sprintf("Error parsing step for: %+v - %s\n", rawRecord)
+		log.Printf(msg)
+		return nil, errors.New(msg)
+	}
+
+	start, err := stringToFloat64(rawRecord.hz_start)
+	if err != nil {
+		msg := fmt.Sprintf("Error parsing step for: %+v - %s\n", rawRecord)
+		log.Printf(msg)
+		return nil, errors.New(msg)
+	}
+
+	records := make([]RfRecord, len(rawRecord.samples))
+	for i, raw_power := range rawRecord.samples {
+		frequency := start + (float64(i) * step)
+		power, err := stringToFloat64(raw_power)
+
+		if err != nil {
+			log.Printf("Error parsing power value(%s): %s\n", raw_power, err)
+			continue
+		}
+
+		records[i] = RfRecord{
+			recorded_at: rawRecord.recorded_at,
+			frequency:   frequency,
+			power:       power,
+		}
+	}
+
+	return records, nil
+}
+
+func stringToFloat64(val string) (float64, error) {
+	return strconv.ParseFloat(val, 64)
 }
 
 // TODO add err return for empty slice
@@ -82,12 +138,4 @@ func getTimestampFromRecord(record []string) time.Time {
 	}
 
 	return recorded_at
-}
-
-func getGpsCoordinates() []string {
-	coords := make([]string, 2)
-	coords[0] = "32.7513718"
-	coords[1] = "-117.14624170000002"
-
-	return coords
 }

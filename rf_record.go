@@ -5,12 +5,7 @@ import (
 )
 
 type RfRecord struct {
-	latitude         string
-	longitude        string
-	recorded_at      time.Time
-	hz_start         string
-	hz_end           string
-	hz_step          string
-	averaged_samples string
-	samples          []string
+	recorded_at time.Time
+	frequency   float64
+	power       float64
 }
