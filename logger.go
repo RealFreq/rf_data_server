@@ -6,16 +6,13 @@ import (
 	"log"
 )
 
-const (
-	GRAPHITE_HOST = "54.191.107.29"
-	GRAPHITE_PORT = 2003
-)
-
 var logSrv *graphite.Graphite
 
 func init() {
 	var err error
-	logSrv, err = graphite.NewGraphite(GRAPHITE_HOST, GRAPHITE_PORT)
+	host, port := GraphiteConfig()
+
+	logSrv, err = graphite.NewGraphite(host, port)
 	if err != nil {
 		log.Fatalf("Could not connect to Graphite server: %s\n", err)
 	}
