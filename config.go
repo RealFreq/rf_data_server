@@ -5,21 +5,27 @@ import (
 	"log"
 )
 
+var graphiteConfig *viper.Viper
+var serverConfig *viper.Viper
+
 func init() {
-	viper.AddConfigPath("config")
+	graphiteConfig = viper.New()
+	serverConfig = viper.New()
+	graphiteConfig.AddConfigPath("config")
+	serverConfig.AddConfigPath("config")
 }
 
 func GraphiteConfig() (string, int) {
-	viper.SetDefault("graphite", map[string]string{"host": "127.0.0.1", "port": "2003"})
+	graphiteConfig.SetDefault("graphite", map[string]string{"host": "127.0.0.1", "port": "2003"})
 
-	viper.SetConfigName("logger")
+	graphiteConfig.SetConfigName("logger")
 
-	err := viper.ReadInConfig()
+	err := graphiteConfig.ReadInConfig()
 	if err != nil {
 		log.Fatalf("Error reading in config file: %s\n", err)
 	}
 
-	config := viper.GetStringMap("graphite")
+	config := graphiteConfig.GetStringMap("graphite")
 
 	host := config["host"].(string)
 	port := config["port"].(int)
@@ -28,16 +34,16 @@ func GraphiteConfig() (string, int) {
 }
 
 func ServerConfig() (string, int) {
-	viper.SetDefault("server", map[string]string{"host": "0.0.0.0", "port": "10000"})
+	serverConfig.SetDefault("server", map[string]string{"host": "0.0.0.0", "port": "10000"})
 
-	viper.SetConfigName("server")
+	serverConfig.SetConfigName("server")
 
-	err := viper.ReadInConfig()
+	err := serverConfig.ReadInConfig()
 	if err != nil {
 		log.Fatalf("Error reading in config file: %s\n", err)
 	}
 
-	config := viper.GetStringMap("server")
+	config := serverConfig.GetStringMap("server")
 
 	host := config["host"].(string)
 	port := config["port"].(int)
